@@ -19,7 +19,7 @@ AUG_EXPORT const char *aug_stats_name(int index);
 
 /**
  * Copy messages newer than since_sequence into out (6 ints each: sequence, type, year,
- * month, param1, param2), oldest first. @return the number of messages copied
+ * month, param1, param2), in no particular order. @return the number of messages copied
  */
 AUG_EXPORT int aug_messages(int since_sequence, int32_t *out, int max_messages);
 /** Title / body of a message type in the game's text encoding (mostly ASCII). May be empty. */

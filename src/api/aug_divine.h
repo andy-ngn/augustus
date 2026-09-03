@@ -34,7 +34,7 @@ AUG_EXPORT int aug_money(int amount);
 /**
  * Add food to the city's granaries (amount > 0, ignores storage orders) or remove it.
  * @param resource A food resource id (1 wheat, 2 vegetables, 3 fruit, 4 olives... see resource.h)
- * @return the engine's result: for adding, the amount that did NOT fit; for removing, the amount removed
+ * @return the amount that could NOT be added or removed (0 = the whole request was honoured)
  */
 AUG_EXPORT int aug_food(int resource, int amount);
 AUG_EXPORT void aug_health_change(int amount);

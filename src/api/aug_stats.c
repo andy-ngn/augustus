@@ -68,8 +68,9 @@ int aug_messages(int since_sequence, int32_t *out, int max_messages)
 {
     int count = city_message_count();
     int copied = 0;
-    // The list is kept newest first; walk it backwards so the caller gets chronological order.
-    for (int i = count - 1; i >= 0 && copied < max_messages; i--) {
+    // Slots 0..count-1 are always occupied (deleting compacts the list) but their order is not
+    // guaranteed between compactions; the caller sorts by sequence.
+    for (int i = 0; i < count && copied < max_messages; i++) {
         const city_message *m = city_message_get(i);
         if (!m || m->sequence <= since_sequence) {
             continue;
