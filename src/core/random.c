@@ -19,11 +19,27 @@ static struct {
     time_t last_seed;
 } data;
 
+#ifdef PANTHEON
+// Pantheon: random_from_stdlib() must not depend on wall-clock time or libc state, otherwise two
+// instances given identical state diverge. It draws from an xorshift stream that is reseeded from
+// the game's own random state every time random_generate_next() runs (once per tick), so calls made
+// by drawing code between ticks cannot influence the simulation either.
+static uint32_t sim_stream = 0x12345679u;
+
+static void reseed_sim_stream(void)
+{
+    sim_stream = (data.iv1 ^ (data.iv2 << 7) ^ 0x9E3779B9u) | 1u;
+}
+#endif
+
 void random_init(void)
 {
     memset(&data, 0, sizeof(data));
     data.iv1 = 0x54657687;
     data.iv2 = 0x72641663;
+#ifdef PANTHEON
+    reseed_sim_stream();
+#endif
 }
 
 void random_generate_next(void)
@@ -48,6 +64,9 @@ void random_generate_next(void)
     data.random1_15bit = data.iv1 & 0x7fff;
     data.random2_7bit = data.iv2 & 0x7f;
     data.random2_15bit = data.iv2 & 0x7fff;
+#ifdef PANTHEON
+    reseed_sim_stream();
+#endif
 }
 
 void random_generate_pool(void)
@@ -88,6 +107,9 @@ void random_load_state(buffer *buf)
 {
     data.iv1 = buffer_read_u32(buf);
     data.iv2 = buffer_read_u32(buf);
+#ifdef PANTHEON
+    reseed_sim_stream();
+#endif
 }
 
 void random_save_state(buffer *buf)
@@ -97,6 +119,14 @@ void random_save_state(buffer *buf)
 }
 
 int random_from_stdlib(void) {
+#ifdef PANTHEON
+    uint32_t x = sim_stream;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    sim_stream = x;
+    return (int) (x & 0x7fffffff);
+#else
     time_t t;
     t = time(&t);
     if (data.last_seed != t) {
@@ -104,6 +134,7 @@ int random_from_stdlib(void) {
         data.last_seed = t;
     }
     return rand();
+#endif
 }
 
 int random_between_from_stdlib(int min, int max)

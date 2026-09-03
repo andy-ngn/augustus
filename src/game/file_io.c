@@ -1980,3 +1980,280 @@ int game_file_io_delete_saved_game(const char *filename)
     }
     return result;
 }
+
+#ifdef PANTHEON
+// ---------------------------------------------------------------------------
+// Pantheon additions: in-memory snapshots and a hash of the simulation state.
+// ---------------------------------------------------------------------------
+
+typedef struct {
+    uint8_t *data;
+    size_t size;
+    size_t capacity;
+} memory_sink;
+
+static int sink_write(memory_sink *sink, const void *bytes, size_t length)
+{
+    if (sink->size + length > sink->capacity) {
+        size_t new_capacity = sink->capacity ? sink->capacity * 2 : (1 << 20);
+        while (new_capacity < sink->size + length) {
+            new_capacity *= 2;
+        }
+        uint8_t *new_data = realloc(sink->data, new_capacity);
+        if (!new_data) {
+            return 0;
+        }
+        sink->data = new_data;
+        sink->capacity = new_capacity;
+    }
+    memcpy(sink->data + sink->size, bytes, length);
+    sink->size += length;
+    return 1;
+}
+
+static int sink_write_int32(memory_sink *sink, int value)
+{
+    uint8_t data[4];
+    buffer buf;
+    buffer_init(&buf, data, 4);
+    buffer_write_i32(&buf, value);
+    return sink_write(sink, data, 4);
+}
+
+int game_file_io_write_saved_game_to_memory(uint8_t **out_data, int *out_size, int compress)
+{
+    resource_set_mapping(RESOURCE_CURRENT_VERSION);
+    init_savegame_data(SAVE_GAME_CURRENT_VERSION);
+    savegame_save_to_state(&savegame_data.state);
+
+    memory_sink sink = { 0, 0, 0 };
+    memory_block compress_buffer;
+    core_memory_block_init(&compress_buffer, COMPRESS_BUFFER_INITIAL_SIZE);
+    int ok = 1;
+    for (int i = 0; ok && i < savegame_data.num_pieces; i++) {
+        file_piece *piece = &savegame_data.pieces[i];
+        if (piece->dynamic) {
+            ok = sink_write_int32(&sink, (int) piece->buf.size);
+            if (!piece->buf.size) {
+                continue;
+            }
+        }
+        if (piece->compressed) {
+            int output_size = 0;
+            if (compress && core_memory_block_ensure_size(&compress_buffer, piece->buf.size) &&
+                zlib_helper_compress(piece->buf.data, (int) piece->buf.size,
+                    compress_buffer.memory, COMPRESS_BUFFER_INITIAL_SIZE, &output_size)) {
+                ok = sink_write_int32(&sink, output_size) && sink_write(&sink, compress_buffer.memory, output_size);
+            } else {
+                ok = sink_write_int32(&sink, UNCOMPRESSED) && sink_write(&sink, piece->buf.data, piece->buf.size);
+            }
+        } else {
+            ok = sink_write(&sink, piece->buf.data, piece->buf.size);
+        }
+    }
+    core_memory_block_free(&compress_buffer);
+    clear_savegame_pieces();
+    if (!ok) {
+        free(sink.data);
+        return 0;
+    }
+    *out_data = sink.data;
+    *out_size = (int) sink.size;
+    return 1;
+}
+
+static uint32_t fnv1a_32(uint32_t hash, const uint8_t *bytes, size_t length)
+{
+    for (size_t i = 0; i < length; i++) {
+        hash ^= bytes[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+// Pieces that only matter to the presentation layer and may legitimately differ
+// between a viewer and a headless instance of the same city.
+static int piece_is_presentation_only(const buffer *buf)
+{
+    const savegame_state *s = &savegame_data.state;
+    return buf == s->file_version || buf == s->city_view_orientation || buf == s->city_view_camera ||
+        buf == s->city_sounds || buf == s->bookmarks || buf == s->player_name || buf == s->scenario_name ||
+        buf == s->campaign_name || buf == s->sprite_grid || buf == s->sprite_backup_grid;
+}
+
+uint32_t game_file_io_state_hash(void)
+{
+    resource_set_mapping(RESOURCE_CURRENT_VERSION);
+    init_savegame_data(SAVE_GAME_CURRENT_VERSION);
+    savegame_save_to_state(&savegame_data.state);
+
+    uint32_t hash = 2166136261u;
+    for (int i = 0; i < savegame_data.num_pieces; i++) {
+        file_piece *piece = &savegame_data.pieces[i];
+        if (piece_is_presentation_only(&piece->buf)) {
+            continue;
+        }
+        uint32_t size = (uint32_t) piece->buf.size;
+        hash = fnv1a_32(hash, (const uint8_t *) &size, sizeof(size));
+        if (piece->buf.size) {
+            hash = fnv1a_32(hash, piece->buf.data, piece->buf.size);
+        }
+    }
+    clear_savegame_pieces();
+    return hash;
+}
+
+
+
+static const char *piece_name(const buffer *buf)
+{
+    const savegame_state *s = &savegame_data.state;
+    if (buf == s->resource_version) return "resource_version";
+    if (buf == s->scenario_campaign_mission) return "scenario_campaign_mission";
+    if (buf == s->file_version) return "file_version";
+    if (buf == s->scenario_version) return "scenario_version";
+    if (buf == s->image_grid) return "image_grid";
+    if (buf == s->edge_grid) return "edge_grid";
+    if (buf == s->building_grid) return "building_grid";
+    if (buf == s->terrain_grid) return "terrain_grid";
+    if (buf == s->aqueduct_grid) return "aqueduct_grid";
+    if (buf == s->figure_grid) return "figure_grid";
+    if (buf == s->bitfields_grid) return "bitfields_grid";
+    if (buf == s->sprite_grid) return "sprite_grid";
+    if (buf == s->random_grid) return "random_grid";
+    if (buf == s->desirability_grid) return "desirability_grid";
+    if (buf == s->elevation_grid) return "elevation_grid";
+    if (buf == s->building_damage_grid) return "building_damage_grid";
+    if (buf == s->aqueduct_backup_grid) return "aqueduct_backup_grid";
+    if (buf == s->sprite_backup_grid) return "sprite_backup_grid";
+    if (buf == s->figures) return "figures";
+    if (buf == s->route_figures) return "route_figures";
+    if (buf == s->route_paths) return "route_paths";
+    if (buf == s->formations) return "formations";
+    if (buf == s->formation_totals) return "formation_totals";
+    if (buf == s->city_data) return "city_data";
+    if (buf == s->city_faction_unknown) return "city_faction_unknown";
+    if (buf == s->player_name) return "player_name";
+    if (buf == s->city_faction) return "city_faction";
+    if (buf == s->buildings) return "buildings";
+    if (buf == s->city_view_orientation) return "city_view_orientation";
+    if (buf == s->game_time) return "game_time";
+    if (buf == s->building_extra_highest_id_ever) return "building_extra_highest_id_ever";
+    if (buf == s->random_iv) return "random_iv";
+    if (buf == s->city_view_camera) return "city_view_camera";
+    if (buf == s->building_count_culture1) return "building_count_culture1";
+    if (buf == s->city_graph_order) return "city_graph_order";
+    if (buf == s->emperor_change_time) return "emperor_change_time";
+    if (buf == s->empire) return "empire";
+    if (buf == s->empire_map) return "empire_map";
+    if (buf == s->empire_cities) return "empire_cities";
+    if (buf == s->building_count_industry) return "building_count_industry";
+    if (buf == s->trade_prices) return "trade_prices";
+    if (buf == s->figure_names) return "figure_names";
+    if (buf == s->culture_coverage) return "culture_coverage";
+    if (buf == s->scenario) return "scenario";
+    if (buf == s->scenario_events) return "scenario_events";
+    if (buf == s->scenario_conditions) return "scenario_conditions";
+    if (buf == s->scenario_actions) return "scenario_actions";
+    if (buf == s->scenario_formulas) return "scenario_formulas";
+    if (buf == s->scenario_texts) return "scenario_texts";
+    if (buf == s->custom_messages) return "custom_messages";
+    if (buf == s->custom_media) return "custom_media";
+    if (buf == s->requests) return "requests";
+    if (buf == s->invasions) return "invasions";
+    if (buf == s->demand_changes) return "demand_changes";
+    if (buf == s->price_changes) return "price_changes";
+    if (buf == s->allowed_buildings) return "allowed_buildings";
+    if (buf == s->custom_variables) return "custom_variables";
+    if (buf == s->message_media_text_blob) return "message_media_text_blob";
+    if (buf == s->message_media_metadata) return "message_media_metadata";
+    if (buf == s->max_game_year) return "max_game_year";
+    if (buf == s->earthquake) return "earthquake";
+    if (buf == s->emperor_change_state) return "emperor_change_state";
+    if (buf == s->messages) return "messages";
+    if (buf == s->message_extra) return "message_extra";
+    if (buf == s->population_messages) return "population_messages";
+    if (buf == s->message_counts) return "message_counts";
+    if (buf == s->message_delays) return "message_delays";
+    if (buf == s->building_list_burning_totals) return "building_list_burning_totals";
+    if (buf == s->figure_sequence) return "figure_sequence";
+    if (buf == s->scenario_settings) return "scenario_settings";
+    if (buf == s->invasion_warnings) return "invasion_warnings";
+    if (buf == s->scenario_is_custom) return "scenario_is_custom";
+    if (buf == s->city_sounds) return "city_sounds";
+    if (buf == s->building_extra_highest_id) return "building_extra_highest_id";
+    if (buf == s->figure_traders) return "figure_traders";
+    if (buf == s->building_list_burning) return "building_list_burning";
+    if (buf == s->building_list_small) return "building_list_small";
+    if (buf == s->building_list_large) return "building_list_large";
+    if (buf == s->tutorial_part1) return "tutorial_part1";
+    if (buf == s->building_count_military) return "building_count_military";
+    if (buf == s->enemy_army_totals) return "enemy_army_totals";
+    if (buf == s->building_storages) return "building_storages";
+    if (buf == s->building_count_culture2) return "building_count_culture2";
+    if (buf == s->building_count_support) return "building_count_support";
+    if (buf == s->tutorial_part2) return "tutorial_part2";
+    if (buf == s->gladiator_revolt) return "gladiator_revolt";
+    if (buf == s->trade_route_limit) return "trade_route_limit";
+    if (buf == s->trade_route_traded) return "trade_route_traded";
+    if (buf == s->trade_routes) return "trade_routes";
+    if (buf == s->trade_history) return "trade_history";
+    if (buf == s->building_barracks_tower_sentry) return "building_barracks_tower_sentry";
+    if (buf == s->building_extra_sequence) return "building_extra_sequence";
+    if (buf == s->routing_counters) return "routing_counters";
+    if (buf == s->building_count_culture3) return "building_count_culture3";
+    if (buf == s->enemy_armies) return "enemy_armies";
+    if (buf == s->city_entry_exit_xy) return "city_entry_exit_xy";
+    if (buf == s->last_invasion_id) return "last_invasion_id";
+    if (buf == s->building_extra_corrupt_houses) return "building_extra_corrupt_houses";
+    if (buf == s->scenario_name) return "scenario_name";
+    if (buf == s->bookmarks) return "bookmarks";
+    if (buf == s->tutorial_part3) return "tutorial_part3";
+    if (buf == s->city_entry_exit_grid_offset) return "city_entry_exit_grid_offset";
+    if (buf == s->campaign_name) return "campaign_name";
+    if (buf == s->end_marker) return "end_marker";
+    if (buf == s->deliveries) return "deliveries";
+    if (buf == s->custom_empire) return "custom_empire";
+    if (buf == s->visited_buildings) return "visited_buildings";
+    if (buf == s->model_data) return "model_data";
+    if (buf == s->rubble_grid) return "rubble_grid";
+    if (buf == s->production_rates) return "production_rates";
+    if (buf == s->monument_stages) return "monument_stages";
+    if (buf == s->finance_ledger) return "finance_ledger";
+    return "?";
+}
+
+void game_file_io_state_hash_dump(void)
+{
+    resource_set_mapping(RESOURCE_CURRENT_VERSION);
+    init_savegame_data(SAVE_GAME_CURRENT_VERSION);
+    savegame_save_to_state(&savegame_data.state);
+    for (int i = 0; i < savegame_data.num_pieces; i++) {
+        file_piece *piece = &savegame_data.pieces[i];
+        uint32_t hash = piece->buf.size ? fnv1a_32(2166136261u, piece->buf.data, piece->buf.size) : 0;
+        printf("piece %3d %-36s size %8d hash %08x%s\n", i, piece_name(&piece->buf), (int) piece->buf.size, hash,
+            piece_is_presentation_only(&piece->buf) ? " (not hashed)" : "");
+    }
+    clear_savegame_pieces();
+}
+
+void game_file_io_dump_pieces(const char *directory)
+{
+    resource_set_mapping(RESOURCE_CURRENT_VERSION);
+    init_savegame_data(SAVE_GAME_CURRENT_VERSION);
+    savegame_save_to_state(&savegame_data.state);
+    for (int i = 0; i < savegame_data.num_pieces; i++) {
+        file_piece *piece = &savegame_data.pieces[i];
+        char path[FILE_NAME_MAX];
+        snprintf(path, FILE_NAME_MAX, "%s/%03d_%s.bin", directory, i, piece_name(&piece->buf));
+        FILE *fp = fopen(path, "wb");
+        if (fp) {
+            if (piece->buf.size) {
+                fwrite(piece->buf.data, 1, piece->buf.size, fp);
+            }
+            fclose(fp);
+        }
+    }
+    clear_savegame_pieces();
+}
+#endif // PANTHEON

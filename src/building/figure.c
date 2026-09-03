@@ -40,6 +40,13 @@
 #include "map/water.h"
 #include "scenario/scenario.h"
 
+#ifdef PANTHEON
+#include "core/random.h"
+// Pantheon: libc rand() is not deterministic across instances; use the game stream instead.
+#define rand() random_from_stdlib()
+#endif
+
+
 #define BEGGAR_UNEMPLOYMENT_THRESHOLD 6
 #define VALID_MONUMENT_RECHECK_TICKS 60
 #define ARCHITECTS RESOURCE_NONE

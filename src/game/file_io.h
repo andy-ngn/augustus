@@ -55,4 +55,27 @@ int game_file_io_write_saved_game(const char *filename);
 
 int game_file_io_delete_saved_game(const char *filename);
 
+#ifdef PANTHEON
+/**
+ * Pantheon: serialize the current game into memory using the .svx file format.
+ * @param out_data Receives a malloc'ed buffer, to be released with free()
+ * @param out_size Receives the size of the buffer
+ * @param compress Whether to deflate the compressible pieces (0 gives a byte-stable dump)
+ * @return 1 on success
+ */
+int game_file_io_write_saved_game_to_memory(uint8_t **out_data, int *out_size, int compress);
+
+/**
+ * Pantheon: FNV-1a hash of the simulation state (every savegame piece except camera,
+ * sounds, sprites, names and other presentation-only pieces).
+ */
+uint32_t game_file_io_state_hash(void);
+
+/** Pantheon: print one line per savegame piece (index, size, hash) to stdout, for debugging. */
+void game_file_io_state_hash_dump(void);
+
+/** Pantheon: write every savegame piece as a raw file into an existing directory, for debugging. */
+void game_file_io_dump_pieces(const char *directory);
+#endif
+
 #endif // GAME_FILE_IO_H

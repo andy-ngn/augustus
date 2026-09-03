@@ -55,4 +55,18 @@ int game_file_delete_saved_game(const char *filename);
  */
 void game_file_write_mission_saved_game(void);
 
+#ifdef PANTHEON
+/**
+ * Pantheon: when disabled, autosaves, yearly autosaves and mission saves become no-ops.
+ * Explicit saves through game_file_io_write_saved_game are unaffected.
+ */
+void game_file_set_disk_saves_enabled(int enabled);
+
+/**
+ * Pantheon: load a saved game from memory (same format as a .svx file).
+ * @return 1 on success, otherwise a FILE_LOAD_* error code
+ */
+int game_file_load_saved_game_from_memory(uint8_t *data, int length);
+#endif
+
 #endif // GAME_FILE_H

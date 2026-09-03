@@ -7,20 +7,22 @@
 
 option(PANTHEON_VIEWER "Build the Pantheon viewer: full SDL game as a MODULARIZE'd ES module (Emscripten only)" OFF)
 
+# Pantheon sources shared by the viewer and the headless engine.
+set(PANTHEON_API_FILES
+    ${PROJECT_SOURCE_DIR}/src/pantheon/zalloc.c
+)
+
 if(PANTHEON_VIEWER)
     if(NOT ${TARGET_PLATFORM} STREQUAL "emscripten")
         message(FATAL_ERROR "PANTHEON_VIEWER requires -DTARGET_PLATFORM=emscripten")
     endif()
-
-    # C API exported to JavaScript (filled in from milestone 1 on).
-    set(PANTHEON_API_FILES
-    )
 
     set(PANTHEON_VIEWER_FILES ${SOURCE_FILES})
     list(REMOVE_ITEM PANTHEON_VIEWER_FILES ${PROJECT_SOURCE_DIR}/res/shell.html)
 
     add_executable(augustus-viewer ${PANTHEON_VIEWER_FILES} ${PANTHEON_API_FILES})
     target_compile_definitions(augustus-viewer PRIVATE PANTHEON PANTHEON_VIEWER)
+    target_compile_options(augustus-viewer PRIVATE -include ${PROJECT_SOURCE_DIR}/src/pantheon/zalloc.h)
 
     set(PANTHEON_VIEWER_LINK_FLAGS
         "-s MODULARIZE=1"
@@ -43,4 +45,68 @@ if(PANTHEON_VIEWER)
         SUFFIX ".mjs"
         LINK_FLAGS "${PANTHEON_VIEWER_LINK_FLAGS_STR}"
     )
+endif()
+
+# ---------------------------------------------------------------------------
+# Headless engine: the simulation without SDL, window, renderer, audio or input.
+# Native: augustus-headless-native CLI (test harness). Emscripten: augustus-headless module.
+# ---------------------------------------------------------------------------
+option(PANTHEON_HEADLESS "Build the headless simulation engine" OFF)
+
+if(PANTHEON_HEADLESS)
+    set(PANTHEON_HEADLESS_PLATFORM_FILES
+        ${PROJECT_SOURCE_DIR}/src/platform/crash_handler.c
+        ${PROJECT_SOURCE_DIR}/src/platform/file_manager.c
+        ${PROJECT_SOURCE_DIR}/src/platform/icon.c
+        ${PROJECT_SOURCE_DIR}/src/platform/log.c
+        ${PROJECT_SOURCE_DIR}/src/platform/prefs.c
+        ${PROJECT_SOURCE_DIR}/src/platform/user_path.c
+        ${PROJECT_SOURCE_DIR}/src/platform/version.c
+        ${PROJECT_SOURCE_DIR}/src/platform/headless/input.c
+        ${PROJECT_SOURCE_DIR}/src/platform/headless/log.c
+        ${PROJECT_SOURCE_DIR}/src/platform/headless/platform.c
+        ${PROJECT_SOURCE_DIR}/src/platform/headless/renderer.c
+        ${PROJECT_SOURCE_DIR}/src/platform/headless/screen.c
+        ${PROJECT_SOURCE_DIR}/src/platform/headless/sound_device.c
+    )
+
+    set(PANTHEON_HEADLESS_FILES
+        ${PANTHEON_HEADLESS_PLATFORM_FILES}
+        ${CORE_FILES}
+        ${BUILDING_FILES}
+        ${CITY_FILES}
+        ${EMPIRE_FILES}
+        ${FIGURE_FILES}
+        ${FIGURETYPE_FILES}
+        ${GAME_FILES}
+        ${INPUT_FILES}
+        ${MAP_FILES}
+        ${ASSETS_FILES}
+        ${SCENARIO_FILES}
+        ${GRAPHICS_FILES}
+        ${SOUND_FILES}
+        ${WIDGET_FILES}
+        ${WINDOW_FILES}
+        ${EDITOR_FILES}
+        ${TRANSLATION_FILES}
+        ${SPNG_FILES}
+        ${SXML_FILES}
+        ${ZIP_FILES}
+        ${PANTHEON_API_FILES}
+    )
+
+    if(${TARGET_PLATFORM} STREQUAL "emscripten")
+        # augustus-headless wasm module: added in milestone 1 once the aug_* API exists.
+        message(STATUS "Pantheon: headless wasm target not defined yet")
+    else()
+        add_executable(augustus-headless-native
+            ${PANTHEON_HEADLESS_FILES}
+            ${PROJECT_SOURCE_DIR}/src/platform/headless/main.c
+        )
+        target_compile_definitions(augustus-headless-native PRIVATE PANTHEON PANTHEON_HEADLESS)
+        target_compile_options(augustus-headless-native PRIVATE -include ${PROJECT_SOURCE_DIR}/src/pantheon/zalloc.h)
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(augustus-headless-native m)
+        endif()
+    endif()
 endif()

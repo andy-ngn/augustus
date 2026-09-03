@@ -462,13 +462,52 @@ int game_file_load_saved_game(const char *filename)
     return 1;
 }
 
+#ifdef PANTHEON
+static int disk_saves_enabled = 1;
+
+void game_file_set_disk_saves_enabled(int enabled)
+{
+    disk_saves_enabled = enabled;
+}
+
+int game_file_load_saved_game_from_memory(uint8_t *data, int length)
+{
+    buffer buf;
+    buffer_init(&buf, data, length);
+    game_campaign_suspend();
+    int result = game_file_io_read_save_game_from_buffer(&buf);
+    if (result != FILE_LOAD_SUCCESS) {
+        game_campaign_restore();
+        return result;
+    }
+    if (!game_campaign_is_active()) {
+        game_campaign_clear();
+    }
+    check_backward_compatibility();
+    initialize_saved_game();
+    building_storage_reset_building_ids();
+    sound_music_update(1);
+    return 1;
+}
+#endif
+
 int game_file_write_saved_game(const char *filename)
 {
+#ifdef PANTHEON
+    if (!disk_saves_enabled) {
+        return 1;
+    }
+#endif
     return game_file_io_write_saved_game(filename);
 }
 
 int game_file_make_yearly_autosave(void)
 {
+#ifdef PANTHEON
+    if (!disk_saves_enabled) {
+        return 1;
+    }
+#endif
     int next_autosave_slot = config_get(CONFIG_GENERAL_NEXT_AUTOSAVE_SLOT);
     if (next_autosave_slot >= config_get(CONFIG_GP_CH_MAX_AUTOSAVE_SLOTS)) {
         next_autosave_slot = 0;
@@ -500,6 +539,11 @@ int game_file_delete_saved_game(const char *filename)
 
 void game_file_write_mission_saved_game(void)
 {
+#ifdef PANTHEON
+    if (!disk_saves_enabled) {
+        return;
+    }
+#endif
     if (!city_mission_should_save_start() || !game_campaign_is_active()) {
         return;
     }
