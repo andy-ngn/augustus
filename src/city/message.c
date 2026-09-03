@@ -1,5 +1,9 @@
 #include "message.h"
 
+#ifdef PANTHEON
+#include "pantheon/rules.h"
+#endif
+
 #include "city/warning.h"
 #include "core/config.h"
 #include "core/encoding.h"
@@ -195,6 +199,11 @@ void city_message_apply_sound_interval(message_category category)
 
 void city_message_post(int use_popup, int message_type, int param1, int param2)
 {
+#ifdef PANTHEON
+    if (!pantheon_popups_enabled()) {
+        use_popup = 0;
+    }
+#endif
     int id = new_message_id();
     if (id < 0) {
         return;

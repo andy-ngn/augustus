@@ -1,5 +1,9 @@
 #include "construction.h"
 
+#ifdef PANTHEON_VIEWER
+#include "api/aug_view.h"
+#endif
+
 #include "assets/assets.h"
 #include "building/building.h"
 #include "building/connectable.h"
@@ -648,6 +652,11 @@ int building_construction_can_rotate(void)
 
 void building_construction_set_type(building_type type, int setup_rotation)
 {
+#ifdef PANTHEON_VIEWER
+    if (aug_view_observe_locked()) {
+        return; // Pantheon observe mode: the god watches, the governor builds
+    }
+#endif
     if (type != data.type) {
         building_rotation_remove_rotation();
     }

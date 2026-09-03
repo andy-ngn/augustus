@@ -317,3 +317,41 @@ void scenario_earthquake_load_state(buffer *buf)
         data.expand[i].y = buffer_read_i32(buf);
     }
 }
+
+#ifdef PANTHEON
+int scenario_earthquake_start_at(int x, int y, int severity)
+{
+    if (severity < EARTHQUAKE_SMALL || severity > EARTHQUAKE_LARGE || !map_grid_is_inside(x, y, 1)) {
+        return 0;
+    }
+    scenario.earthquake.severity = severity;
+    scenario.earthquake_point.x = x;
+    scenario.earthquake_point.y = y;
+    switch (severity) {
+        case EARTHQUAKE_SMALL:
+            data.max_duration = 25 + (random_byte() & 0x1f);
+            data.max_delay = 10;
+            break;
+        case EARTHQUAKE_MEDIUM:
+            data.max_duration = 100 + (random_byte() & 0x3f);
+            data.max_delay = 8;
+            break;
+        default:
+            data.max_duration = 250 + random_byte();
+            data.max_delay = 6;
+            break;
+    }
+    data.game_year = game_time_year();
+    data.month = game_time_month();
+    data.state = EVENT_IN_PROGRESS;
+    data.duration = 0;
+    data.delay = 0;
+    for (int i = 0; i < 4; i++) {
+        data.expand[i].x = x;
+        data.expand[i].y = y;
+    }
+    advance_earthquake_to_tile(x, y);
+    city_message_post(1, MESSAGE_EARTHQUAKE, 0, map_grid_offset(x, y));
+    return 1;
+}
+#endif

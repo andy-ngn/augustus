@@ -1,5 +1,9 @@
 #include "gods.h"
 
+#ifdef PANTHEON
+#include "pantheon/rules.h"
+#endif
+
 #include "building/count.h"
 #include "building/granary.h"
 #include "building/industry.h"
@@ -254,6 +258,11 @@ static void update_god_moods(void)
         return;
     }
 
+#ifdef PANTHEON
+    if (god_id < MAX_GODS && !pantheon_god_autonomous(god_id)) {
+        god_id = MAX_GODS; // Pantheon: the player's deity acts only through the divine API
+    }
+#endif
     if (god_id < MAX_GODS) {
         god_status *god = &city_data.religion.gods[god_id];
         if (god->happiness >= 50 && god->happy_bolts >= BLESSING_BOLTS_NEEDED_FOR_BLESSING) {

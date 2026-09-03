@@ -1,11 +1,15 @@
 #include "api/aug_view.h"
 
+#include "building/construction.h"
 #include "city/view.h"
 #include "game/file.h"
 #include "game/state.h"
+#include "graphics/window.h"
+#include "platform/screen.h"
 #include "window/city.h"
 
 static int external_tick_enabled;
+static int observe_locked;
 
 int aug_view_external_tick_enabled(void)
 {
@@ -59,4 +63,78 @@ void aug_view_set_paused(int paused)
     } else {
         game_state_unpause();
     }
+}
+
+void aug_view_set_observe_lock(int locked)
+{
+    observe_locked = locked ? 1 : 0;
+    if (observe_locked) {
+        building_construction_cancel();
+        building_construction_clear_type();
+    }
+}
+
+int aug_view_observe_locked(void)
+{
+    return observe_locked;
+}
+
+int aug_view_window_allowed(int window_id)
+{
+    switch (window_id) {
+        case WINDOW_CITY:
+        case WINDOW_OVERLAY_MENU:
+        case WINDOW_SLIDING_SIDEBAR:
+        case WINDOW_BUILDING_INFO:
+        case WINDOW_MESSAGE_DIALOG:
+        case WINDOW_MESSAGE_LIST:
+        case WINDOW_PLAIN_MESSAGE_DIALOG:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+void aug_view_set_sidebar_collapsed(int collapsed)
+{
+    if (city_view_is_sidebar_collapsed() != (collapsed ? 1 : 0)) {
+        city_view_toggle_sidebar();
+        window_invalidate();
+    }
+}
+
+int aug_view_sidebar_collapsed(void)
+{
+    return city_view_is_sidebar_collapsed();
+}
+
+void aug_view_resize(int width, int height)
+{
+    if (width < 640) {
+        width = 640;
+    }
+    if (height < 480) {
+        height = 480;
+    }
+    platform_screen_set_window_size(width, height);
+}
+
+int aug_view_screen_to_grid_offset(int x, int y)
+{
+    view_tile tile;
+    if (!city_view_pixels_to_view_tile(x, y, &tile)) {
+        return 0;
+    }
+    return city_view_tile_to_grid_offset(&tile);
+}
+
+void aug_view_set_scale(int percent)
+{
+    city_view_set_scale(percent);
+    window_invalidate();
+}
+
+int aug_view_scale(void)
+{
+    return city_view_get_scale();
 }

@@ -509,3 +509,10 @@ int city_health_get_population_with_water_access(void)
 {
     return city_data.health.population_access.fountains;
 }
+
+#ifdef PANTHEON
+void city_health_force_disease_in_building(int building_id)
+{
+    cause_disease_in_building(building_id);
+}
+#endif

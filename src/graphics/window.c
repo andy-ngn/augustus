@@ -1,5 +1,9 @@
 #include "window.h"
 
+#ifdef PANTHEON_VIEWER
+#include "api/aug_view.h"
+#endif
+
 #include "game/system.h"
 #include "graphics/graphics.h"
 #include "graphics/warning.h"
@@ -81,6 +85,11 @@ window_id window_get_id(void)
 
 void window_show(const window_type *window)
 {
+#ifdef PANTHEON_VIEWER
+    if (aug_view_observe_locked() && !aug_view_window_allowed(window->id)) {
+        return; // Pantheon observe mode: only viewing windows may open
+    }
+#endif
     reset_input();
     increase_queue_index();
     data.window_queue[data.queue_index] = *window;

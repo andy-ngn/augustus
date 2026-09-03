@@ -35,5 +35,10 @@ int city_health_get_population_with_baths_access(void);
 int city_health_get_population_with_well_access(void);
 int city_health_get_population_with_latrines_access(void);
 int city_health_get_population_with_water_access(void);
+
+#ifdef PANTHEON
+/** Pantheon: put a building into plague state as the engine's own disease logic would. */
+void city_health_force_disease_in_building(int building_id);
+#endif
     
 #endif // CITY_HEALTH_H

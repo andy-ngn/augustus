@@ -10,6 +10,9 @@ option(PANTHEON_VIEWER "Build the Pantheon viewer: full SDL game as a MODULARIZE
 # Pantheon sources shared by the viewer and the headless engine.
 set(PANTHEON_API_FILES
     ${PROJECT_SOURCE_DIR}/src/api/aug_api.c
+    ${PROJECT_SOURCE_DIR}/src/api/aug_divine.c
+    ${PROJECT_SOURCE_DIR}/src/api/aug_stats.c
+    ${PROJECT_SOURCE_DIR}/src/pantheon/rules.c
     ${PROJECT_SOURCE_DIR}/src/pantheon/zalloc.c
 )
 
