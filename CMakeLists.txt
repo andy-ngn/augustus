@@ -1168,3 +1168,6 @@ else()
     endif()
 
 endif()
+
+# Pantheon (https://github.com/andy-ngn/augustus, branch pantheon): extra targets, no-op when absent
+include(${PROJECT_SOURCE_DIR}/cmake/pantheon.cmake OPTIONAL)
