@@ -5,22 +5,11 @@
 //       [--save OUT.svx] [--hash] [--quiet]
 //
 // A game month is 16 days of 50 ticks (800 ticks); a year is 9600 ticks.
+#include "api/aug_api.h"
 #include "platform/headless/headless.h"
 
-#include "city/finance.h"
-#include "city/population.h"
-#include "core/image.h"
-#include "core/log.h"
-#include "core/time.h"
-#include "game/file.h"
 #include "game/file_io.h"
-#include "game/game.h"
-#include "game/system.h"
-#include "game/tick.h"
-#include "game/time.h"
-#include "platform/file_manager.h"
 #include "platform/log.h"
-#include "platform/screen.h"
 
 #include <limits.h>
 #include <stdio.h>
@@ -28,8 +17,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MILLIS_PER_TICK 16
-#define TICKS_PER_YEAR (12 * 16 * 50)
+#define TICKS_PER_YEAR AUG_TICKS_PER_YEAR
 
 static void usage(void)
 {
@@ -50,8 +38,8 @@ static void silent_log(const char *message, int is_error)
 static void print_status(long ticks_done)
 {
     printf("ticks %ld  date %d-%02d-%02d.%02d  population %d  treasury %d\n",
-        ticks_done, game_time_year(), game_time_month() + 1, game_time_day() + 1, game_time_tick(),
-        city_population(), city_finance_treasury());
+        ticks_done, aug_time_year(), aug_time_month() + 1, aug_time_day() + 1, aug_time_tick(),
+        aug_population(), aug_treasury());
     fflush(stdout);
 }
 
@@ -128,7 +116,7 @@ int main(int argc, char **argv)
         platform_log_set_output_function(silent_log);
     }
     if (pref_dir) {
-        headless_set_pref_path(absolute_path(pref_dir, pref_storage));
+        absolute_path(pref_dir, pref_storage);
     }
     if (assets_base) {
         headless_set_assets_base_path(absolute_path(assets_base, assets_storage));
@@ -149,51 +137,27 @@ int main(int argc, char **argv)
         }
     }
 
-    platform_log_setup();
-    log_info("Augustus headless", system_version(), 0);
-
-    if (!platform_file_manager_set_base_path(c3_dir)) {
-        fprintf(stderr, "error: cannot use Caesar III directory %s\n", c3_dir);
+    if (!aug_init(c3_dir, pref_dir ? pref_storage : 0, !full_images)) {
+        fprintf(stderr, "error: engine initialisation failed for %s\n", c3_dir);
         return 1;
     }
-    if (!game_pre_init()) {
-        fprintf(stderr, "error: game_pre_init failed (is %s a Caesar III directory?)\n", c3_dir);
-        return 1;
-    }
-    if (!platform_screen_create("headless", 100, 0)) {
-        fprintf(stderr, "error: platform_screen_create failed\n");
-        return 1;
-    }
-    headless_set_ticks(0);
-    time_set_millis(0);
-    image_set_index_only(!full_images);
-    if (!game_init()) {
-        fprintf(stderr, "error: game_init failed\n");
-        return 1;
-    }
-    game_file_set_disk_saves_enabled(0);
-
-    int loaded = scenario
-        ? game_file_start_scenario_by_name((const uint8_t *) scenario)
-        : game_file_load_saved_game(load) == 1;
+    int loaded = scenario ? aug_load_scenario(scenario) : aug_load_save(load);
     if (!loaded) {
         fprintf(stderr, "error: failed to load %s\n", scenario ? scenario : load);
         return 1;
     }
     print_status(0);
 
-    uint64_t millis = 0;
     long done = 0;
-    for (; done < ticks; done++) {
-        millis += MILLIS_PER_TICK;
-        headless_set_ticks(millis);
-        time_set_millis((time_millis) millis);
-        game_tick_run();
-        if (report_every && (done + 1) % report_every == 0) {
-            print_status(done + 1);
+    while (done < ticks && !headless_exit_requested()) {
+        long chunk = report_every ? report_every - (done % report_every) : ticks - done;
+        if (chunk > ticks - done) {
+            chunk = ticks - done;
         }
-        if (headless_exit_requested()) {
-            break;
+        aug_tick((int) chunk);
+        done += chunk;
+        if (report_every && done % report_every == 0) {
+            print_status(done);
         }
     }
     if (!report_every || done % report_every) {
@@ -201,29 +165,24 @@ int main(int argc, char **argv)
     }
     if (memory_roundtrip) {
         // write(A) -> read -> hash, without touching the disk; uncompressed for speed.
-        uint8_t *bytes = 0;
         int size = 0;
-        if (!game_file_io_write_saved_game_to_memory(&bytes, &size, 0)) {
+        uint8_t *bytes = aug_state_write(&size, 0);
+        if (!bytes) {
             fprintf(stderr, "error: snapshot to memory failed\n");
             return 1;
         }
-        int result = game_file_load_saved_game_from_memory(bytes, size);
-        free(bytes);
-        if (result != 1) {
-            fprintf(stderr, "error: load from memory failed (%d)\n", result);
+        int ticks_before = aug_ticks_total();
+        int ok = aug_state_read(bytes, size);
+        aug_free(bytes);
+        if (!ok) {
+            fprintf(stderr, "error: load from memory failed\n");
             return 1;
         }
-        printf("memory roundtrip %d bytes, hash after reload %08x\n", size, game_file_io_state_hash());
-    }
-    if (save) {
-        if (!game_file_io_write_saved_game(save)) {
-            fprintf(stderr, "error: failed to save %s\n", save);
-            return 1;
-        }
-        printf("saved %s\n", save);
+        printf("memory roundtrip %d bytes, ticks %d -> %d, hash after reload %08x\n", size, ticks_before,
+            aug_ticks_total(), aug_state_hash());
     }
     if (want_hash) {
-        printf("hash %08x\n", game_file_io_state_hash());
+        printf("hash %08x\n", aug_state_hash());
     }
     if (want_pieces) {
         game_file_io_state_hash_dump();

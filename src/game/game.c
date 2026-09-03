@@ -1,5 +1,8 @@
 #include "game.h"
 
+#ifdef PANTHEON_VIEWER
+#include "api/aug_view.h"
+#endif
 #include "assets/assets.h"
 #include "building/monument.h"
 #include "building/properties.h"
@@ -228,6 +231,11 @@ void game_run(void)
 {
     game_animation_update();
     int num_ticks = game_speed_get_elapsed_ticks();
+#ifdef PANTHEON_VIEWER
+    if (aug_view_external_tick_enabled()) {
+        num_ticks = 0; // Pantheon drives the clock through aug_tick()
+    }
+#endif
     for (int i = 0; i < num_ticks; i++) {
         game_tick_run();
         game_file_write_mission_saved_game();
