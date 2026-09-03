@@ -66,7 +66,8 @@ AUG_EXPORT int aug_earthquake(int x, int y, int severity);
  *        4 goth, 5 pergamum, 6 seleucid, 7 etruscan, 8 greek, 9 egyptian, 10 carthaginian
  */
 AUG_EXPORT int aug_invade(int type, int size, int invasion_point, int attack_type, int enemy_id);
-/** Release a pack of wolves (1-16) at (x, y). @return the formation id, 0 on failure */
+/** Release a finite pack of wolves (1-16) at (x, y); unlike scenario herds it never respawns.
+ *  @return the formation id, 0 on failure */
 AUG_EXPORT int aug_wolves(int x, int y, int count);
 /** Weather: 0 none, 1 rain, 2 snow, 3 sandstorm; intensity as the scenario events use it. */
 AUG_EXPORT void aug_weather(int type, int intensity);

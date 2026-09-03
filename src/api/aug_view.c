@@ -86,10 +86,10 @@ int aug_view_window_allowed(int window_id)
         case WINDOW_OVERLAY_MENU:
         case WINDOW_SLIDING_SIDEBAR:
         case WINDOW_BUILDING_INFO:
-        case WINDOW_MESSAGE_DIALOG:
-        case WINDOW_MESSAGE_LIST:
         case WINDOW_PLAIN_MESSAGE_DIALOG:
             return 1;
+        // WINDOW_MESSAGE_LIST / WINDOW_MESSAGE_DIALOG stay denied: reading marks messages read and
+        // deleting compacts the list, both of which are in the sim hash; the web feed replaces them.
         default:
             return 0;
     }

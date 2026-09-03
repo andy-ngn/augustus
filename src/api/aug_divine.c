@@ -267,6 +267,10 @@ int aug_wolves(int x, int y, int count)
         f->formation_id = formation_id;
         f->wait_ticks = f->id & 0x1f;
     }
+    // Stock wolf herds respawn while num_figures < max_figures (formation_herd.c can_spawn_wolf), which
+    // would make a divine pack a permanent den. Zero max_figures so the pack is finite; the empty
+    // formation slot stays in use afterwards, exactly like an extinct scenario herd.
+    formation_get(formation_id)->max_figures = 0;
     return formation_id;
 }
 
