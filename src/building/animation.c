@@ -13,6 +13,9 @@
 #include "map/image.h"
 #include "map/sprite.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 static void advance_monument_secondary_animation(building *b)
 {
     if (b->type == BUILDING_GRAND_TEMPLE_CERES && b->monument.upgrades == 1) {
@@ -221,6 +224,63 @@ int building_animation_advance_storage_flag(building *b, int image_id)
     return b->data.warehouse.flag_frame;
 }
 
+#ifdef PANTHEON
+// Pantheon: fumigation_frame/fumigation_direction are part of the saved building record but are only
+// advanced by the draw code. Keeping them in a side array means drawing never changes simulation state,
+// so a viewer and a headless instance ticking the same city stay hash-identical.
+typedef struct {
+    unsigned char frame;
+    unsigned char direction;
+} fumigation_anim;
+
+static fumigation_anim *fumigation_side;
+static int fumigation_capacity;
+
+static fumigation_anim *fumigation_state(const building *b)
+{
+    if (b->id >= fumigation_capacity) {
+        int new_capacity = b->id + 1024;
+        fumigation_anim *grown = calloc(new_capacity, sizeof(fumigation_anim));
+        if (!grown) {
+            static fumigation_anim fallback;
+            return &fallback;
+        }
+        if (fumigation_side) {
+            memcpy(grown, fumigation_side, fumigation_capacity * sizeof(fumigation_anim));
+            free(fumigation_side);
+        }
+        fumigation_side = grown;
+        fumigation_capacity = new_capacity;
+    }
+    return &fumigation_side[b->id];
+}
+
+int building_animation_fumigation_frame(const building *b)
+{
+    return fumigation_state(b)->frame;
+}
+
+void building_animation_set_fumigation_direction(const building *b, int direction)
+{
+    fumigation_state(b)->direction = direction ? 1 : 0;
+}
+
+int building_animation_advance_fumigation(building *b)
+{
+    fumigation_anim *anim = fumigation_state(b);
+    if (game_animation_should_advance(8)) {
+        if (anim->direction) {
+            anim->frame++;
+        } else {
+            anim->frame--;
+        }
+    }
+    if (anim->frame > 5) {
+        anim->frame = 0;
+    }
+    return anim->frame;
+}
+#else
 int building_animation_advance_fumigation(building *b)
 {
     if (game_animation_should_advance(8)) {
@@ -237,3 +297,4 @@ int building_animation_advance_fumigation(building *b)
 
     return b->fumigation_frame;
 }
+#endif

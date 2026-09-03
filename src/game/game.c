@@ -2,6 +2,8 @@
 
 #ifdef PANTHEON_VIEWER
 #include "api/aug_view.h"
+#include "api/aug_api.h"
+#include "core/time.h"
 #endif
 #include "assets/assets.h"
 #include "building/monument.h"
@@ -235,15 +237,29 @@ void game_run(void)
     if (aug_view_external_tick_enabled()) {
         num_ticks = 0; // Pantheon drives the clock through aug_tick()
     }
+    // Possess mode: the stock speed controls decide how many ticks run, but every tick still goes
+    // through aug_tick() so the virtual clock stays authoritative for the simulation (each tick gets
+    // its own timestamp, and snapshots taken in possess mode stay coherent with observe mode).
+    // The real clock is restored afterwards for the animation/draw code.
+    time_millis real_millis = time_get_millis();
 #endif
     for (int i = 0; i < num_ticks; i++) {
+#ifdef PANTHEON_VIEWER
+        aug_tick(1);
+#else
         game_tick_run();
+#endif
         game_file_write_mission_saved_game();
 
         if (window_is_invalid()) {
             break;
         }
     }
+#ifdef PANTHEON_VIEWER
+    if (num_ticks > 0) {
+        time_set_millis(real_millis);
+    }
+#endif
 }
 
 void game_draw(void)

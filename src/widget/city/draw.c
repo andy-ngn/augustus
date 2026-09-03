@@ -51,6 +51,15 @@
 #include "widget/city/highway.h"
 #include "widget/city/overlay/overlay.h"
 
+#ifdef PANTHEON
+// Pantheon: the fumigation counters are saved state; the viewer keeps them in a side array (building/animation.c)
+#define FUMIGATION_FRAME(b) building_animation_fumigation_frame(b)
+#define SET_FUMIGATION_DIRECTION(b, d) building_animation_set_fumigation_direction(b, d)
+#else
+#define FUMIGATION_FRAME(b) ((b)->fumigation_frame)
+#define SET_FUMIGATION_DIRECTION(b, d) ((b)->fumigation_direction = (d))
+#endif
+
 #define OFFSET(x,y) (x + GRID_SIZE * y)
 
 #define WAREHOUSE_FLAG_FRAMES 9
@@ -771,13 +780,13 @@ static void draw_figures(int x, int y, int grid_offset)
 static void draw_fumigation(building *b, int x, int y, color_t color_mask)
 {
     int image_id = image_group(GROUP_FIGURE_EXPLOSION); // smoke image_id
-    image_id += b->fumigation_frame;
+    image_id += FUMIGATION_FRAME(b);
     image_draw(image_id, x, y, color_mask, draw_context.scale);
     if (image_id == image_group(GROUP_FIGURE_EXPLOSION) + 3) {
-        b->fumigation_direction = 0;
+        SET_FUMIGATION_DIRECTION(b, 0);
     }
     if (image_id == image_group(GROUP_FIGURE_EXPLOSION)) {
-        b->fumigation_direction = 1;
+        SET_FUMIGATION_DIRECTION(b, 1);
     }
     building_animation_advance_fumigation(b);
 }
@@ -837,7 +846,7 @@ static void draw_plague(building *b, int x, int y, color_t color_mask)
         if (is_fumigating) {
             draw_fumigation(b, x_pos, y_pos, color_mask);
         } else {
-            b->fumigation_direction = 1;
+            SET_FUMIGATION_DIRECTION(b, 1);
             image_draw(image_group(GROUP_PLAGUE_SKULL), x_pos, y_pos, color_mask, draw_context.scale);
         }
     }
