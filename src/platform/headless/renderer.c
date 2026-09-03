@@ -107,6 +107,9 @@ static const image_atlas_data *prepare_image_atlas(atlas_type type, int num_imag
     image_atlas_data *atlas = &data.atlas[type];
     atlas->type = type;
     atlas->num_images = num_images;
+    if (num_images <= 0) {
+        return atlas; // index-only mode: present, but empty
+    }
     atlas->buffers = calloc(num_images, sizeof(color_t *));
     atlas->image_widths = calloc(num_images, sizeof(int));
     atlas->image_heights = calloc(num_images, sizeof(int));

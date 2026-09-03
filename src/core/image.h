@@ -97,6 +97,15 @@ typedef struct {
  * @param keep_atlas_buffers Whether to keep the atlas buffers in memory after the images are created
  * @return boolean true on success, false on failure
  */
+#ifdef PANTHEON
+/**
+ * Pantheon: when enabled, image loading reads only the .sg2 indices and skips all pixel data.
+ * Must be set before the first image_load_* call.
+ */
+void image_set_index_only(int enabled);
+int image_is_index_only(void);
+#endif
+
 int image_load_climate(int climate_id, int is_editor, int force_reload, int keep_atlas_buffers);
 
 /**

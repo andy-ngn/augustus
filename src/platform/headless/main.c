@@ -9,6 +9,7 @@
 
 #include "city/finance.h"
 #include "city/population.h"
+#include "core/image.h"
 #include "core/log.h"
 #include "core/time.h"
 #include "game/file.h"
@@ -35,7 +36,7 @@ static void usage(void)
     fputs("usage: augustus-headless-native --c3 DIR (--scenario NAME.map | --load FILE.svx)\n"
         "         [--assets-base DIR] [--pref DIR] [--ticks N] [--years Y] [--report N]\n"
         "         [--save OUT.svx] [--snapshot OUT.svx] [--memory-roundtrip]\n"
-        "         [--hash] [--hash-pieces] [--quiet]\n", stderr);
+        "         [--hash] [--hash-pieces] [--full-images] [--quiet]\n", stderr);
 }
 
 static void silent_log(const char *message, int is_error)
@@ -71,7 +72,7 @@ int main(int argc, char **argv)
 {
     const char *c3_dir = 0, *assets_base = 0, *pref_dir = 0, *scenario = 0, *load = 0, *save = 0;
     long ticks = 0, report_every = 0;
-    int want_hash = 0, want_pieces = 0, quiet = 0, memory_roundtrip = 0;
+    int want_hash = 0, want_pieces = 0, quiet = 0, memory_roundtrip = 0, full_images = 0;
     const char *snapshot = 0, *dump_dir = 0;
 
     for (int i = 1; i < argc; i++) {
@@ -85,6 +86,8 @@ int main(int argc, char **argv)
             want_pieces = 1;
         } else if (!strcmp(arg, "--memory-roundtrip")) {
             memory_roundtrip = 1;
+        } else if (!strcmp(arg, "--full-images")) {
+            full_images = 1;
         } else if (!value) {
             usage();
             return 2;
@@ -163,6 +166,7 @@ int main(int argc, char **argv)
     }
     headless_set_ticks(0);
     time_set_millis(0);
+    image_set_index_only(!full_images);
     if (!game_init()) {
         fprintf(stderr, "error: game_init failed\n");
         return 1;

@@ -496,6 +496,16 @@ asset_image *asset_image_create(void)
 int asset_image_load_all(color_t **main_images, int *main_image_widths)
 {
 #ifndef BUILDING_ASSET_PACKER
+#ifdef PANTHEON
+    if (!main_images) {
+        // Index-only mode: the XML metadata is all the simulation needs.
+        const image_atlas_data *empty = graphics_renderer()->prepare_image_atlas(ATLAS_EXTRA_ASSET, 0, 0, 0);
+        if (empty) {
+            graphics_renderer()->create_image_atlas(empty, 1);
+        }
+        return 1;
+    }
+#endif
     image_packer packer;
     int max_width, max_height;
     graphics_renderer()->get_max_image_size(&max_width, &max_height);

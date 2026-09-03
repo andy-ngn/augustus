@@ -226,6 +226,31 @@ static multibyte_font_data multibyte_font_info[MULTIBYTE_FONT_MAX] = {
 
 static const image DUMMY_IMAGE = { 0 };
 
+#ifdef PANTHEON
+// Pantheon: index-only mode reads the .sg2 indices (image sizes, animation info, offsets) but
+// never touches the .555 pixel data, so a headless instance needs no atlas memory.
+static int index_only;
+
+void image_set_index_only(int enabled)
+{
+    index_only = enabled;
+}
+
+int image_is_index_only(void)
+{
+    return index_only;
+}
+
+// Marks an atlas as present without pixel data so "already loaded" checks keep working.
+static void create_empty_atlas(atlas_type type)
+{
+    const image_atlas_data *atlas_data = graphics_renderer()->prepare_image_atlas(type, 0, 0, 0);
+    if (atlas_data) {
+        graphics_renderer()->create_image_atlas(atlas_data, 1);
+    }
+}
+#endif
+
 static struct {
     int current_climate;
     int current_enemy;
@@ -719,6 +744,25 @@ int image_load_climate(int climate_id, int is_editor, int force_reload, int keep
         return 0;
     }
 
+#ifdef PANTHEON
+    if (index_only) {
+        free(tmp_data);
+        free_draw_data(draw_data, IMAGE_MAIN_ENTRIES);
+        create_empty_atlas(ATLAS_MAIN);
+        if (!keep_atlas_buffers) {
+            assets_init(data.is_editor != is_editor, 0, 0);
+        }
+        update_native_images(data.current_climate, climate_id);
+        data.current_climate = climate_id;
+        data.is_editor = is_editor;
+        data.images_with_tops = 0;
+        if (!is_editor) {
+            fix_animation_offsets();
+        }
+        return 1;
+    }
+#endif
+
     int data_size = io_read_file_into_buffer(filename_bmp, MAY_BE_LOCALIZED, tmp_data, MAIN_DATA_SIZE);
     if (!data_size) {
         free(tmp_data);
@@ -1166,6 +1210,16 @@ int image_load_enemy(int enemy_id)
         free_draw_data(draw_data, ENEMY_ENTRIES);
         return 0;
     }
+
+#ifdef PANTHEON
+    if (index_only) {
+        free(tmp_data);
+        free_draw_data(draw_data, ENEMY_ENTRIES);
+        create_empty_atlas(ATLAS_ENEMY);
+        data.current_enemy = enemy_id;
+        return 1;
+    }
+#endif
 
     int data_size = io_read_file_into_buffer(filename_bmp, MAY_BE_LOCALIZED, tmp_data, ENEMY_DATA_SIZE);
     if (!data_size) {

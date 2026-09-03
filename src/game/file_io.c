@@ -2078,7 +2078,8 @@ static int piece_is_presentation_only(const buffer *buf)
     const savegame_state *s = &savegame_data.state;
     return buf == s->file_version || buf == s->city_view_orientation || buf == s->city_view_camera ||
         buf == s->city_sounds || buf == s->bookmarks || buf == s->player_name || buf == s->scenario_name ||
-        buf == s->campaign_name || buf == s->sprite_grid || buf == s->sprite_backup_grid;
+        buf == s->campaign_name || buf == s->sprite_grid || buf == s->sprite_backup_grid ||
+        buf == s->routing_counters; // statistics only: how many routes were computed so far
 }
 
 uint32_t game_file_io_state_hash(void)

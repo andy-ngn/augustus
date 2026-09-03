@@ -418,7 +418,9 @@ static void formulas_save_state(buffer *buf)
         + sizeof(int32_t)             // evaluation
         + sizeof(uint8_t) * 2         // is_static + is_error
         + sizeof(int32_t) * 2;        // min_evaluation + max_evaluation
-    buffer_init_dynamic_array(buf, scenario_formulas.size, struct_size);
+    // Index 0 is reserved and never written, so declare one entry less than the array size;
+    // otherwise every save/load cycle appends a phantom entry.
+    buffer_init_dynamic_array(buf, scenario_formulas.size ? scenario_formulas.size - 1 : 0, struct_size);
 
     scenario_formula_t *formula;
 
@@ -472,7 +474,9 @@ static void texts_save_state(buffer *buf)
     int struct_size =
         sizeof(uint32_t)                              // id
         + sizeof(uint8_t) * MAX_SCENARIO_TEXT_LENGTH; // text
-    buffer_init_dynamic_array(buf, scenario_texts.size, struct_size);
+    // Index 0 is reserved and never written, so declare one entry less than the array size;
+    // otherwise every save/load cycle appends a phantom entry.
+    buffer_init_dynamic_array(buf, scenario_texts.size ? scenario_texts.size - 1 : 0, struct_size);
 
     scenario_text_t *text;
 
